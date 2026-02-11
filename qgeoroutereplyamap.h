@@ -24,7 +24,7 @@ private:
     QNetworkReply *m_reply;
 };
 
-Q_DECLARE_METATYPE(QGeoRouteReplyAmap)
+//Q_DECLARE_METATYPE(QGeoRouteReplyAmap)
 QT_END_NAMESPACE
 
 #endif // QGEOROUTEREPLYOrs_H
