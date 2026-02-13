@@ -13,6 +13,8 @@
 #include <QNetworkRequest>
 #include <QNetworkProxy>
 #include <QtCore/QJsonDocument>
+#include <QSqlError>
+#include <QCoreApplication>
 
 #if (QT_VERSION >= QT_VERSION_CHECK(6,0,0))
     #include <QRegularExpression>
@@ -43,6 +45,10 @@ QGeoTileFetcherAmap::QGeoTileFetcherAmap(const QVariantMap &parameters,
   m_tileSize(tileSize),
   _amapVersionRetrieved(false)
 {
+
+
+    m_offline = parameters.value(QStringLiteral("amap.offline")).toBool();
+
     if(parameters.contains(QStringLiteral("amap.maps.apikey")))
         m_apiKey = parameters.value(QStringLiteral("amap.maps.apikey")).toString();
     else
@@ -80,10 +86,35 @@ QGeoTileFetcherAmap::QGeoTileFetcherAmap(const QVariantMap &parameters,
         To use the new feature getUrl() and parsing the response has to be adapted. Maybe more than that...
     */
 //    _getSessionToken();
+
+    if (m_offline) {
+        QString tilesDirName = parameters.value(QStringLiteral("amap.offline.tilesfolder"), QCoreApplication::applicationDirPath() + "/tiles").toString();
+        QList<QGeoMapType> types = engine->supportedMapTypes();
+        for (int i = 0; i < types.count(); i++) {
+            QFileInfo info(tilesDirName + "/" + types.at(i).name() + ".mbtiles");
+            if (!info.exists())
+                continue;
+            QString connName = QString("mbtiles_%1").arg(types[i].mapId());
+            m_db[types[i].mapId()] = QSqlDatabase::addDatabase("QSQLITE", connName);
+            m_db[types[i].mapId()].setDatabaseName(info.absoluteFilePath());
+        }
+
+        QFile file404(":/404.png");
+        if (file404.open(QFile::ReadOnly)) {
+            m_pic404 = file404.readAll();
+            file404.close();
+        }
+    }
+
+
 }
 
 QGeoTileFetcherAmap::~QGeoTileFetcherAmap()
 {
+    for (auto it = m_db.begin(); it != m_db.end(); it++) {
+        if (it.value().isOpen())
+            it.value().close();
+    }
 }
 
 void QGeoTileFetcherAmap::_getSessionToken()
@@ -115,15 +146,20 @@ void QGeoTileFetcherAmap::_getSessionToken()
 
 QGeoTiledMapReply *QGeoTileFetcherAmap::getTileImage(const QGeoTileSpec &spec)
 {
-    QString surl = _getURL(spec.mapId(), spec.x(), spec.y(), spec.zoom());
-    // qDebug()<<"_getURL:" << surl;
-    QUrl url(surl);
+    QGeoTiledMapReply *mapReply;
+    if (!m_db.contains(spec.mapId())) {
+        QString surl = _getURL(spec.mapId(), spec.x(), spec.y(), spec.zoom());
+        qDebug()<<"_getURL:" << surl;
+        QUrl url(surl);
 
-    netRequest.setUrl(url);
+        netRequest.setUrl(url);
 
-    QNetworkReply *netReply = m_networkManager->get(netRequest);
+        QNetworkReply *netReply = m_networkManager->get(netRequest);
 
-    QGeoTiledMapReply *mapReply = new QGeoMapReplyAmap(netReply, spec);
+        mapReply = new QGeoMapReplyAmap(netReply, spec);
+    } else {
+        mapReply = new QGeoMapReplyAmap(m_db[spec.mapId()], m_pic404, spec);
+    }
 
     return mapReply;
 }

@@ -1,8 +1,8 @@
 TARGET = qtgeoservices_amap
-QT += location-private positioning-private network
+QT += location-private positioning-private network sql
 
 PLUGIN_TYPE = geoservices
-PLUGIN_CLASS_NAME = QGeoServiceProviderFactoryBingMaps
+PLUGIN_CLASS_NAME = QGeoServiceProviderFactoryAmap
 load(qt_plugin)
 
 HEADERS += \
@@ -44,4 +44,7 @@ OTHER_FILES += \
 
 DISTFILES += \
     README.md
+
+RESOURCES += \
+	amap.qrc
 

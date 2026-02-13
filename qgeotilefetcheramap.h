@@ -6,6 +6,7 @@
 #include <QtLocation/private/qgeotilefetcher_p.h>
 #include <QMutex>
 #include <QNetworkReply>
+#include <QSqlDatabase>
 
 QT_BEGIN_NAMESPACE
 
@@ -64,7 +65,11 @@ private:
     QString         _versionAmapTerrain;
     QString         _secAmapWord;
 
+    bool m_offline;
+    QMap<int, QSqlDatabase> m_db;
+    QByteArray m_pic404;
     QNetworkRequest netRequest;
+
 };
 
 QT_END_NAMESPACE

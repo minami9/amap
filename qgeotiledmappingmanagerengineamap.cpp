@@ -13,6 +13,7 @@
 #include <QtCore/QJsonDocument>
 #include <QtCore/qmath.h>
 #include <QtCore/qstandardpaths.h>
+#include <QCoreApplication>
 
 QT_BEGIN_NAMESPACE
 
@@ -42,23 +43,38 @@ QGeoTiledMappingManagerEngineAmap::QGeoTiledMappingManagerEngineAmap(const QVari
     setTileSize(QSize(tile, tile));
 
     QList<QGeoMapType> types;
-    #if QT_VERSION < QT_VERSION_CHECK(5,9,0)
-          types << QGeoMapType(QGeoMapType::StreetMap, tr("Road Map"), tr("Normal map view in daylight mode"), false, false, 1);
-          types << QGeoMapType(QGeoMapType::SatelliteMapDay, tr("Satellite"), tr("Satellite map view in daylight mode"), false, false, 2);
-          types << QGeoMapType(QGeoMapType::TerrainMap, tr("Terrain"), tr("Terrain map view in daylight mode"), false, false, 3);
-          types << QGeoMapType(QGeoMapType::HybridMap, tr("Hybrid"), tr("Satellite map view with streets in daylight mode"), false, false, 4);
-    #elif QT_VERSION < QT_VERSION_CHECK(5,10,0)
-         types << QGeoMapType(QGeoMapType::StreetMap, tr("Road Map"), tr("Normal map view in daylight mode"), false, false, 1, "amap");
-         types << QGeoMapType(QGeoMapType::SatelliteMapDay, tr("Satellite"), tr("Satellite map view in daylight mode"), false, false, 2, "amap");
-         types << QGeoMapType(QGeoMapType::TerrainMap, tr("Terrain"), tr("Terrain map view in daylight mode"), false, false, 3, "amap");
-         types << QGeoMapType(QGeoMapType::HybridMap, tr("Hybrid"), tr("Satellite map view with streets in daylight mode"), false, false, 4, "amap");
-    #else
-        //QGeoCameraCapabilities cameraCapabilities;
-        types << QGeoMapType(QGeoMapType::StreetMap, tr("Road Map"), tr("Normal map view in daylight mode"), false,false, 1, "amap", capabilities);
-        types << QGeoMapType(QGeoMapType::TerrainMap, tr("Terrain"), tr("Terrain map view in daylight mode"), false, false, 2, "amap", capabilities);
-        types << QGeoMapType(QGeoMapType::SatelliteMapDay, tr("Satellite"), tr("Satellite map view in daylight mode"), false, false, 3, "amap", capabilities);
-        types << QGeoMapType(QGeoMapType::HybridMap, tr("Hybrid"), tr("Satellite map view with streets in daylight mode"), false, false, 4, "amap", capabilities);
-    #endif
+
+    bool offline = parameters.value(QStringLiteral("amap.offline"), false).toBool();
+
+#if QT_VERSION < QT_VERSION_CHECK(5,9,0)
+    types << QGeoMapType(QGeoMapType::StreetMap, tr("Road Map"), tr("Normal map view in daylight mode"), false, false, 1);
+    types << QGeoMapType(QGeoMapType::SatelliteMapDay, tr("Satellite"), tr("Satellite map view in daylight mode"), false, false, 2);
+    types << QGeoMapType(QGeoMapType::TerrainMap, tr("Terrain"), tr("Terrain map view in daylight mode"), false, false, 3);
+    types << QGeoMapType(QGeoMapType::HybridMap, tr("Hybrid"), tr("Satellite map view with streets in daylight mode"), false, false, 4);
+#elif QT_VERSION < QT_VERSION_CHECK(5,10,0)
+    types << QGeoMapType(QGeoMapType::StreetMap, tr("Road Map"), tr("Normal map view in daylight mode"), false, false, 1, "amap");
+    types << QGeoMapType(QGeoMapType::SatelliteMapDay, tr("Satellite"), tr("Satellite map view in daylight mode"), false, false, 2, "amap");
+    types << QGeoMapType(QGeoMapType::TerrainMap, tr("Terrain"), tr("Terrain map view in daylight mode"), false, false, 3, "amap");
+    types << QGeoMapType(QGeoMapType::HybridMap, tr("Hybrid"), tr("Satellite map view with streets in daylight mode"), false, false, 4, "amap");
+#else
+    //QGeoCameraCapabilities cameraCapabilities;
+    types << QGeoMapType(QGeoMapType::StreetMap, tr("Road Map"), tr("Normal map view in daylight mode"), false,false, 1, "amap", capabilities);
+    types << QGeoMapType(QGeoMapType::TerrainMap, tr("Terrain"), tr("Terrain map view in daylight mode"), false, false, 2, "amap", capabilities);
+    types << QGeoMapType(QGeoMapType::SatelliteMapDay, tr("Satellite"), tr("Satellite map view in daylight mode"), false, false, 3, "amap", capabilities);
+    types << QGeoMapType(QGeoMapType::HybridMap, tr("Hybrid"), tr("Satellite map view with streets in daylight mode"), false, false, 4, "amap", capabilities);
+#endif
+    if (offline) {
+        // for offline only support terrain
+        QString tilesDirName = parameters.value(QStringLiteral("amap.offline.tilesfolder"), QCoreApplication::applicationDirPath() + "/tiles").toString();
+        QDir tilesDir(tilesDirName);
+        QFileInfoList list = tilesDir.entryInfoList(QDir::NoDotAndDotDot | QDir::Files);
+        for (int i = 0; i < list.count(); i++) {
+            const QFileInfo &info = list.at(i);
+            if (info.suffix() != "mbtiles")
+                continue;
+            types << QGeoMapType(QGeoMapType::CustomMap, info.baseName(), tr(""), false, false, (types.count() + 1), "amap", capabilities);
+        }
+    }
 
     setSupportedMapTypes(types);
 
@@ -69,6 +85,18 @@ QGeoTiledMappingManagerEngineAmap::QGeoTiledMappingManagerEngineAmap(const QVari
         m_cacheDirectory = parameters.value(QStringLiteral("amap.cachefolder")).toString().toLatin1();
     else
         m_cacheDirectory = QAbstractGeoTileCache::baseCacheDirectory() + QLatin1String("amap");
+    /* 使用离线包，清除所有cache数据 */
+    if (offline) {
+        QDir cacheDir(m_cacheDirectory);
+        QFileInfoList list = cacheDir.entryInfoList(QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs);
+        for (const QFileInfo &info : list) {
+            if (info.isDir())
+                QDir(info.absoluteFilePath()).removeRecursively();
+            else
+                QFile::remove(info.absoluteFilePath());
+        }
+    }
+
 
     QAbstractGeoTileCache *tileCache = new QGeoFileTileCache(m_cacheDirectory);
     tileCache->setMaxDiskUsage(100 * 1024 * 1024);
