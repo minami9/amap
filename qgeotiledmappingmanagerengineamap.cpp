@@ -85,18 +85,6 @@ QGeoTiledMappingManagerEngineAmap::QGeoTiledMappingManagerEngineAmap(const QVari
         m_cacheDirectory = parameters.value(QStringLiteral("amap.cachefolder")).toString().toLatin1();
     else
         m_cacheDirectory = QAbstractGeoTileCache::baseCacheDirectory() + QLatin1String("amap");
-    /* 使用离线包，清除所有cache数据 */
-    if (offline) {
-        QDir cacheDir(m_cacheDirectory);
-        QFileInfoList list = cacheDir.entryInfoList(QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs);
-        for (const QFileInfo &info : list) {
-            if (info.isDir())
-                QDir(info.absoluteFilePath()).removeRecursively();
-            else
-                QFile::remove(info.absoluteFilePath());
-        }
-    }
-
 
     QAbstractGeoTileCache *tileCache = new QGeoFileTileCache(m_cacheDirectory);
     tileCache->setMaxDiskUsage(100 * 1024 * 1024);
